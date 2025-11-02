@@ -1,15 +1,15 @@
 // app/api/send-otp/route.ts
 
-import { NextResponse } from "next/server";
-import nodemailer from "nodemailer";
-import { generateOTP, storeOTP } from "@/lib/otp"; // adjust the path as needed
+import { NextResponse } from 'next/server';
+import nodemailer from 'nodemailer';
+import { generateOTP, storeOTP } from '@/lib/otp'; // adjust the path as needed
 
 export async function POST(req: Request) {
   try {
     const { email } = await req.json();
 
     if (!email) {
-      return NextResponse.json({ error: "Email is required" }, { status: 400 });
+      return NextResponse.json({ error: 'Email is required' }, { status: 400 });
     }
 
     // Generate a 6-digit OTP
@@ -18,7 +18,6 @@ export async function POST(req: Request) {
     // Set expiration (e.g., 10 minutes from now)
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-    // Store the OTP in your MongoDB using Prisma
     await storeOTP(email, otp, expiresAt);
 
     // Create a transporter for sending the email using SMTP
@@ -37,7 +36,7 @@ export async function POST(req: Request) {
     const mailOptions = {
       from: process.env.EMAIL_FROM, // e.g., '"Your App" <no-reply@yourdomain.com>'
       to: email,
-      subject: "Your OTP Code",
+      subject: 'Your OTP Code',
       text: `Your OTP code is: ${otp}. It expires in 10 minutes.`,
       // Optionally, add HTML content:
       html: `<p>Your OTP code is: <strong>${otp}</strong>. It expires in 10 minutes.</p>`,
@@ -46,9 +45,9 @@ export async function POST(req: Request) {
     // Send the email
     await transporter.sendMail(mailOptions);
 
-    return NextResponse.json({ message: "OTP sent successfully" });
+    return NextResponse.json({ message: 'OTP sent successfully' });
   } catch (error: any) {
-    console.error("Error in send-otp API:", error);
-    return NextResponse.json({ error: "Failed to send OTP" }, { status: 500 });
+    console.error('Error in send-otp API:', error);
+    return NextResponse.json({ error: 'Failed to send OTP' }, { status: 500 });
   }
 }

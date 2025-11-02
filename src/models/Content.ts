@@ -6,7 +6,7 @@ export interface IContent extends Document {
   _id: string;
   title: string;
   views: number;
-  thumbnail: string;
+  thumbnail: Types.ObjectId;
   contentType: ContentType;
   data: string;
   createdAt: Date;
@@ -29,20 +29,26 @@ export interface IContent extends Document {
   version: number; // The versioning field
   institutionId?: Types.ObjectId; // For B2B model
 }
-
+const defaultData = `'{\"ROOT\":{\"type\":{\"resolvedName\":\"renderCanvas\"},\"isCanvas\":true,\"props\":{\"gap\":8,\"padding\":16},\"displayName\":\"Canvas\",\"custom\":{},\"hidden\":false,\"nodes\":[],\"linkedNodes\":{}}}'
+`
 const ContentSchema = new mongoose.Schema<IContent>({
   title: { type: String, required: true },
   views: { type: Number, default: 0 },
-  thumbnail: { type: String, required: true },
+  thumbnail: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: "Media",
+    required: true 
+  },
   contentType: {
     type: String,
     enum: ['static', 'dynamic'],
     required: true,
-    default: 'static' // Default to 'static' for your current needs
+    default: 'dynamic' // Default to 'static' for your current needs
   },
   data: {
     type: String,
-    required: false
+    required: true,
+    default: defaultData
   },
   createdAt: {
     type: Date,

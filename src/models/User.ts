@@ -5,13 +5,14 @@ export interface IUser extends Document {
   _id: Types.ObjectId; // Explicit _id
   name: string;
   email: string;
+  phone_number?: string;
   password_hash?: string; // Make password optional for OAuth users
   user_type: string;
   userTag: string;
   createdAt: Date;
   gender?: string; // Make gender optional as it might not come from OAuth
   bio?: string;
-  profileImage?: string; // Can be populated from Google
+  profileImage?: Types.ObjectId; // Can be populated from Google
   tags: string[];
   credentials: string[];
   subscribersCount: number;
@@ -31,7 +32,10 @@ const userSchema = new mongoose.Schema({
     unique: true,
     match: [/\S+@\S+\.\S+/, 'is invalid']
   },
-  // Password is NOT required at the schema level for OAuth users
+  phone_number: {
+    type: String,
+    required: false
+  },
   password_hash: {
     type: String,
     required: false // Changed from true
@@ -56,7 +60,10 @@ const userSchema = new mongoose.Schema({
     required: false // Changed from true
   },
   bio: String,
-  profileImage: String, // Google might provide this
+  profileImage: {
+    type: mongoose.Schema.Types.ObjectId,
+    required: false
+  }, // Google might provide this
   bannerImage: String,
   tags: [String],
   credentials: [String],

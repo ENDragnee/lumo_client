@@ -1,10 +1,12 @@
 //@/lib/mongodb.ts
-import mongoose, { Mongoose } from "mongoose";
+import mongoose, { Mongoose } from 'mongoose';
 
 const MONGODB_URI = process.env.DATABASE_URL;
 
 if (!MONGODB_URI) {
-  throw new Error('Please define the DATABASE_URL environment variable in your .env file');
+  throw new Error(
+    'Please define the DATABASE_URL environment variable in your .env file',
+  );
 }
 
 /**
@@ -46,14 +48,15 @@ const connectDB = async (): Promise<Mongoose> => {
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000,
       maxPoolSize: 10,
-      dbName: "Lumo",
     };
 
     // console.log("🔥 Creating new MongoDB connection."); // Uncomment for debugging
-    cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongooseInstance) => {
-      console.log("✅ MongoDB connected successfully!");
-      return mongooseInstance;
-    });
+    cached.promise = mongoose
+      .connect(MONGODB_URI, opts)
+      .then((mongooseInstance) => {
+        console.log('✅ MongoDB connected successfully!');
+        return mongooseInstance;
+      });
   }
 
   try {
@@ -63,7 +66,7 @@ const connectDB = async (): Promise<Mongoose> => {
   } catch (e) {
     // If the connection fails, nullify the promise so the next request can try again.
     cached.promise = null;
-    console.error("❌ MongoDB connection error:", e);
+    console.error('❌ MongoDB connection error:', e);
     throw e;
   }
 

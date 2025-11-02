@@ -3,15 +3,14 @@
 import { NextAuthOptions, User as NextAuthUser, Account, Profile } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import GoogleProvider from 'next-auth/providers/google';
-import { verifyPassword } from './password-utils'; // Adjust path if needed
+import { verifyPassword } from './password-utils';
 import connectDB from "@/lib/mongodb";
-// Ensure IUser interface has _id: Types.ObjectId;
 import User, { IUser } from '@/models/User';
+import Media, { IMedia } from '@/models/Media'
 import mongoose, { Types } from 'mongoose';
 import { JWT } from 'next-auth/jwt';
 
 // --- Helper Function: generateUniqueUserTag ---
-// (Make sure this function is defined as provided in the previous response)
 async function generateUniqueUserTag(name: string): Promise<string> {
     await connectDB();
     let baseTag = name.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 15) || 'user';
@@ -38,13 +37,18 @@ async function generateUniqueUserTag(name: string): Promise<string> {
 }
 // --- End Helper Function ---
 
-
 export const authOptions: NextAuthOptions = {
   providers: [
         GoogleProvider({
           clientId: process.env.GOOGLE_CLIENT_ID as string,
           clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
-          authorization: { /* ... */ }
+          authorization: {
+            params: {
+              prompt: "consent",
+              access_type: "offline",
+              response_type: "code"
+            }
+          }
         }),
         CredentialsProvider({
             name: 'Credentials',
@@ -53,24 +57,22 @@ export const authOptions: NextAuthOptions = {
               password: { label: "Password", type: "password" }
             },
             async authorize(credentials) {
-                // ... credentials auth logic ...
                  if (!credentials?.email || !credentials.password) { throw new Error('Missing credentials'); }
                  try {
                      await connectDB();
                      const existingUser = await User.findOne<IUser>({ email: credentials.email }).lean();
                      if (!existingUser) { throw new Error('Invalid credentials'); }
-                     if (!existingUser.password_hash) { throw new Error('Invalid credentials'); } // Check for password
+                     if (!existingUser.password_hash) { throw new Error('This account must sign in with Google.'); }
                      const isValid = await verifyPassword(credentials.password, existingUser.password_hash);
                      if (!isValid) { throw new Error('Invalid credentials'); }
 
-                     // Ensure _id exists and assert type before returning
                      if (!existingUser._id) {
                          console.error("Credentials Auth: User found but missing _id:", existingUser.email);
                          throw new Error("Authentication failed: User data incomplete.");
                      }
 
                      return {
-                         id: (existingUser._id as Types.ObjectId).toString(), // Assert type here too
+                         id: (existingUser._id as Types.ObjectId).toString(),
                          name: existingUser.name,
                          email: existingUser.email,
                      };
@@ -83,126 +85,134 @@ export const authOptions: NextAuthOptions = {
   ],
 
    session: { strategy: 'jwt' },
-   pages: { /* ... */ },
+
+   pages: {
+    signIn: '/auth/signin',
+    signOut: '/auth/signout',
+    error: '/auth/error',
+    verifyRequest: '/auth/verify-request',
+    newUser: '/'
+   },
 
   callbacks: {
-    // --- signIn Callback ---
     async signIn({ user, account, profile }: { user: NextAuthUser, account: Account | null, profile?: Profile }) {
       if (!account || !account.provider) { return false; }
       await connectDB();
 
-      if (account.provider !== 'credentials') { // OAuth Flow
+      if (account.provider === 'google') {
         try {
           const email = profile?.email;
-          if (!email) { return false; }
+          if (!email) {
+            console.error("Google profile missing email");
+            return false;
+          }
 
           const existingUser = await User.findOne<IUser>({ email }).lean();
 
           if (existingUser) {
-             // **FIX Error 1**: Check _id exists and assert its type for toString()
-             if (!existingUser._id) {
-                 console.error("OAuth SignIn: Existing user found but missing _id:", { email });
-                 return false; // Cannot proceed without _id
-             }
-             // Assert _id is ObjectId before calling toString()
+             if (!existingUser._id) { return false; }
              const existingUserIdString = (existingUser._id as Types.ObjectId).toString();
+             const updateData: Partial<IUser> = {
+                provider: 'google',
+                providerAccountId: account.providerAccountId,
+             };
 
-             // Check if already linked
-             if (existingUser.provider === account.provider && existingUser.providerAccountId === account.providerAccountId) {
-                 user.id = existingUserIdString; // Ensure JWT gets the ID
-                 return true;
+             if (!existingUser.profileImage && profile?.image) {
+                const newMedia = await Media.create({
+                    // FIX: Add explicit type assertion to resolve TS ambiguity
+                    uploadedBy: existingUser._id as Types.ObjectId,
+                    mediaType: 'image',
+                    filename: 'google-profile.jpg',
+                    path: profile.image,
+                });
+                updateData.profileImage = newMedia._id;
              }
 
-             // Link account if not linked to any provider yet
-             if (!existingUser.provider || !existingUser.providerAccountId) {
-                 await User.updateOne(
-                     { _id: existingUser._id }, // Use the non-string _id for query
-                     { $set: {
-                         provider: account.provider as 'google',
-                         providerAccountId: account.providerAccountId,
-                         profileImage: existingUser.profileImage || profile?.image,
-                       }
-                     }
-                 );
-                 console.log(`Linked ${account.provider} account for existing user: ${email}`);
-                 user.id = existingUserIdString; // Ensure JWT gets the ID
-                 return true;
-             } else {
-                 // Account exists but is linked to a different provider
-                 console.warn(`Sign-in attempt failed: Email ${email} already linked to ${existingUser.provider}.`);
-                 return `/auth/error?error=OAuthAccountNotLinked`; // Redirect to error page
+             await User.updateOne({ _id: existingUser._id }, { $set: updateData });
+             user.id = existingUserIdString;
+             return true;
+
+          } else {
+             if (!profile?.name) {
+                console.error("Google profile missing name");
+                return false;
              }
-          } else { // Create new OAuth user
-             if (!profile?.name) { return false; }
+             const newUserId = new mongoose.Types.ObjectId();
+             let profileMediaId: Types.ObjectId | undefined = undefined;
+
+             if (profile.image) {
+                 const newMedia = await Media.create({
+                     // FIX: Add explicit type assertion here as well for consistency
+                     uploadedBy: newUserId as Types.ObjectId,
+                     mediaType: 'image',
+                     filename: 'google-profile.jpg',
+                     path: profile.image,
+                 });
+                 profileMediaId = newMedia._id;
+             }
+
              const uniqueUserTag = await generateUniqueUserTag(profile.name);
              const newUser = await User.create({
+                 _id: newUserId,
                  email: email,
                  name: profile.name,
-                 profileImage: profile.image,
-                 provider: account.provider,
+                 profileImage: profileMediaId,
+                 provider: 'google',
                  providerAccountId: account.providerAccountId,
                  userTag: uniqueUserTag,
                  user_type: 'student',
              });
-             if (!newUser?._id) { return false; }
-             user.id = newUser._id.toString(); // Ensure JWT gets the ID
+             user.id = newUser._id.toString();
              return true;
           }
         } catch (error) {
-          console.error(`Error during OAuth signIn callback (${account.provider}):`, error);
+          console.error(`Error during Google signIn callback:`, error);
           return false;
         }
-      } else { // Credentials Flow (already handled by authorize)
-          return !!user?.id; // Allow if authorize returned a user object with an id
+      } else if (account.provider === 'credentials') {
+          return !!user?.id;
       }
-    }, // End signIn Callback
+      return false;
+    },
 
-    // --- JWT Callback ---
     async jwt({ token, user, account }: { token: JWT, user?: NextAuthUser, account?: Account | null }) {
-        // Persist the Database User ID (_id string) to the token
         if (user?.id) {
            token.id = user.id;
         }
 
-        // Add user details to token on initial sign-in (OAuth or Credentials)
-        // Avoid DB lookup if details are already in token from subsequent requests
-        if (account && user && token.email == null) { // Check if details are missing
+        if (account) {
              await connectDB();
-             if (!token.id) {
-                 console.error("JWT Callback: Cannot fetch user, token.id is missing.");
-                 return token;
-             }
+             if (!token.id) return token;
 
-             // **FIX Error 2**: Fetch user and use type assertion `as IUser`
-             const dbUser = await User.findById(token.id).lean() as (IUser & {_id: Types.ObjectId}) | null; // Assert type here
+             // FIX: Cast the result of populate().lean() to a known type. This resolves all
+             // subsequent property access errors.
+             const dbUser = await User.findById(token.id)
+                .populate('profileImage')
+                .lean() as (IUser & { profileImage?: IMedia }) | null;
 
              if (dbUser) {
                 token.name = dbUser.name;
                 token.email = dbUser.email;
-                token.picture = dbUser.profileImage; // Standard JWT/Session field
-                // Add other fields if needed: token.userTag = dbUser.userTag;
-             } else {
-                 console.error("JWT Callback: Could not find user in DB with ID:", token.id);
-                 // Optionally clear potentially stale info if user deleted?
-                 // delete token.name; delete token.email; delete token.picture;
+                token.picture = dbUser.profileImage?.path;
+                token.userTag = dbUser.userTag;
+                token.user_type = dbUser.user_type;
              }
         }
         return token;
-    }, // End JWT Callback
+    },
 
-    // --- Session Callback ---
     async session({ session, token }: { session: any, token: JWT }) {
         if (session?.user) {
-             // Add properties from token to session if they exist
-             if (token.id) session.user.id = token.id as string;
-             if (token.name) session.user.name = token.name as string;
-             if (token.email) session.user.email = token.email as string;
-             if (token.picture) session.user.image = token.picture as string; // Map picture to image
-             // if (token.userTag) session.user.userTag = token.userTag; // Add other props
+             session.user.id = token.id;
+             if (token.name) session.user.name = token.name;
+             if (token.email) session.user.email = token.email;
+             if (token.picture) session.user.image = token.picture;
+             if (token.userTag) session.user.userTag = token.userTag;
+             if (token.user_type) session.user.user_type = token.user_type;
         }
         return session;
-    }, // End Session Callback
-  }, // End Callbacks
+    },
+  },
 
   debug: process.env.NODE_ENV === 'development',
   secret: process.env.NEXTAUTH_SECRET,

@@ -1,12 +1,12 @@
-// src/app/api/user/recent-content/route.ts
+// @/app/api/user/recent-content/route.ts
 
 import { NextResponse, NextRequest } from 'next/server';
-import mongoose, { Types } from 'mongoose';
+import mongoose from 'mongoose';
 import { getServerSession } from "next-auth/next";
 
 // Libs & Helpers
 import connectDB from '@/lib/mongodb';
-import redis from '@/lib/redis'; // Import the configured Redis client
+import redis from '@/lib/redis';
 import { authOptions } from "@/lib/auth";
 
 // Models
@@ -15,15 +15,7 @@ import Content from '@/models/Content';
 import Performance from '@/models/Performance';
 import User from '@/models/User';
 
-// ===================================================================================
-// CONFIGURATION
-// ===================================================================================
-// How long the "recent content" data should be cached in seconds. 5 minutes is a good default.
 const CACHE_TTL_SECONDS = 300; 
-
-// ===================================================================================
-// API Handler
-// ===================================================================================
 
 export async function GET(request: NextRequest) {
     // --- 1. AUTHENTICATION ---
@@ -44,12 +36,9 @@ export async function GET(request: NextRequest) {
         const cachedData = await redis.get(cacheKey);
         if (cachedData) {
             console.log(`CACHE HIT for recent content: ${cacheKey}`);
-            // Data in Redis is a string, so we parse it back to JSON
             return NextResponse.json(JSON.parse(cachedData));
         }
     } catch (redisError) {
-        // If Redis fails, we log the error but proceed to the database.
-        // The caching layer should be resilient and not crash the application.
         console.error("Redis GET error in /user/recent-content:", redisError);
     }
 
@@ -58,7 +47,7 @@ export async function GET(request: NextRequest) {
     try {
         await connectDB();
 
-        // --- 3. AGGREGATION PIPELINE (This now only runs on a cache miss) ---
+        // --- 3. AGGREGATION PIPELINE ---
         const recentContentPipeline: mongoose.PipelineStage[] = [
             { $match: { userId: userIdObject } },
             { $sort: { timestamp: -1 } },
@@ -89,6 +78,14 @@ export async function GET(request: NextRequest) {
             { $match: { isDraft: false, isTrash: false } },
             {
                 $lookup: {
+                    from: 'media',
+                    localField: 'thumbnail',
+                    foreignField: '_id',
+                    as: 'thumbnailInfo'
+                }
+            },
+            {
+                $lookup: {
                     from: User.collection.name,
                     localField: 'createdBy',
                     foreignField: '_id',
@@ -110,9 +107,9 @@ export async function GET(request: NextRequest) {
                 $project: {
                     _id: 1,
                     title: 1,
-                    thumbnail: 1,
                     tags: 1,
                     lastAccessedAt: 1,
+                    thumbnail: { $arrayElemAt: ['$thumbnailInfo.path', 0] },
                     createdBy: {
                         _id: { $arrayElemAt: ['$creatorInfo._id', 0] },
                         name: { $arrayElemAt: ['$creatorInfo.name', 0] }
@@ -127,13 +124,9 @@ export async function GET(request: NextRequest) {
         const recentContent = await Interaction.aggregate(recentContentPipeline);
         
         // --- 4. REDIS CACHING (SET) ---
-        // After fetching fresh data, store it in the cache for subsequent requests.
         try {
-            // We stringify the JSON array to store it in Redis.
-            // 'EX' sets the expiration time in seconds (Time-To-Live).
             await redis.set(cacheKey, JSON.stringify(recentContent), 'EX', CACHE_TTL_SECONDS);
         } catch (redisError) {
-            // Again, log the error but don't prevent the response from being sent.
             console.error("Redis SET error in /user/recent-content:", redisError);
         }
 

@@ -3,7 +3,7 @@ import mongoose, { Document, Model, Types } from 'mongoose';
 export interface IBook extends Document {
   title: string;
   description?: string;
-  thumbnail: string;
+  thumbnail: Types.ObjectId;
   parentId: Types.ObjectId | null;
   isDraft: boolean;
   isTrash: boolean;
@@ -15,16 +15,20 @@ export interface IBook extends Document {
   publishedAt?: Date;
   views: number;
   favorites: number;
-  ratings: {
-    average: number;
-    count: number;
+  userEngagement: {
+    rating?: number;
+    views?: number;
+    saves?: number;
+    shares?: number;
+    completions?: number;
   };
+  institutionId?: Types.ObjectId; // For B2B model
 }
 
 const BookSchema = new mongoose.Schema<IBook>({
   title: { type: String, required: true },
   description: { type: String },
-  thumbnail: { type: String, required: false },
+  thumbnail: { type: mongoose.Schema.Types.ObjectId, ref: "Media", required: false },
   isDraft: { type: Boolean, default: true },
   isTrash: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
@@ -40,10 +44,18 @@ const BookSchema = new mongoose.Schema<IBook>({
   publishedAt: { type: Date },
   views: { type: Number, default: 0 },
   favorites: { type: Number, default: 0 },
-  ratings: {
-    average: { type: Number, default: 0 },
-    count: { type: Number, default: 0 }
-  }
+  userEngagement: {
+    rating: { type: Number, default: 0 },
+    views: { type: Number, default: 0 },
+    saves: { type: Number, default: 0 },
+    shares: { type: Number, default: 0 },
+    completions: { type: Number, default: 0 }
+  },
+  institutionId: { // This links to your new Institution model
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Institution',
+    required: false // Optional, for content not tied to an institution
+  },
 });
 
 const Book: Model<IBook> =

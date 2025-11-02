@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
       {
         protocol: "https",
         hostname: "lumo-creator.aasciihub.com",
+        pathname: "/**"
       },
     ],
   },

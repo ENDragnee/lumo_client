@@ -1,0 +1,70 @@
+name: lumo
+
+services:
+  mongodb:
+    image: mongo:8.0.15
+    container_name: lumo_monogodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ascii_lumo
+      MONGO_INITDB_ROOT_PASSWORD: qazwsxedc
+      MONGO_INITDB_DATABASE: lumo
+    ports:
+      - '27017:27017'
+    volumes:
+      - lumo_monogodb_vol:/data/db
+    networks:
+      - lumo_network
+
+  redis:
+    image: redis:8.2.1
+    container_name: vdi_influx_db
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    #volumes:
+    #- lumo_redis_vol:/var/lib/redis/lumo
+    networks:
+      - lumo_network
+
+  minio:
+    image: minio/minio:latest
+    container_name: lumo_blob
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ascii_lumo_blob
+      MINIO_ROOT_PASSWORD: qazwsxedc
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    volumes:
+      - lumo_blob:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - lumo_network
+
+  nextjs_app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lumo_container
+    restart: unless-stopped
+    env_file:
+      - .env.local
+    ports:
+      - '3000:3000'
+    networks:
+      - lumo_network
+    depends_on:
+      - mongodb
+      - redis
+      - minio
+
+volumes:
+  lumo_monogodb_vol:
+  lumo_redis_vol:
+  lumo_blob:
+
+networks:
+  lumo_network:
+    driver: bridge

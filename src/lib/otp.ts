@@ -1,40 +1,42 @@
 // otp.ts
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import connectDB from '@/lib/mongodb';
+import Otp from '@/models/Otp';
 
 export const generateOTP = (length = 6) => {
   return Math.floor(
-    10 ** (length - 1) + Math.random() * 9 * 10 ** (length - 1)
+    10 ** (length - 1) + Math.random() * 9 * 10 ** (length - 1),
   ).toString();
 };
 
 export const storeOTP = async (email: string, otp: string, expiresAt: Date) => {
   try {
-    const result = await prisma.otp.upsert({
-      where: { email },
-      update: { otp, expiresAt },
-      create: { email, otp, expiresAt }
-    });
+    await connectDB();
+    const result = await Otp.findOneAndUpdate(
+      { email },
+      { otp, expiresAt },
+      { upsert: true, new: true },
+    );
     return result;
   } catch (error) {
     console.error('Error storing OTP:', error);
-    throw error;
+    throw new Error(
+      'Error storing OTP in MongoDB: ' + (error as Error).message,
+    );
   }
 };
 
 export const verifyOTP = async (email: string, otp: string) => {
   try {
-    const record = await prisma.otp.findUnique({ where: { email } });
-    if (!record || record.otp !== otp || record.expiresAt < new Date()) return false;
+    await connectDB();
+    const record = await Otp.findOne({ email });
+    if (!record || record.otp !== otp || record.expiresAt < new Date())
+      return false;
     return true;
   } catch (error) {
     console.error('Error verifying OTP:', error);
-    throw error;
+    throw new Error(
+      'Error verifying OTP in MongoDB: ' + (error as Error).message,
+    );
   }
 };
 
-// Ensure connection is closed when the app terminates
-process.on('beforeExit', async () => {
-  await prisma.$disconnect();
-});

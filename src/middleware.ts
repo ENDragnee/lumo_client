@@ -9,12 +9,6 @@ export async function middleware(request: NextRequest) {
   const token = await getToken({ req: request });
   const { pathname } = request.nextUrl;
 
-  // --- Interaction Tracking Block REMOVED ---
-  // The old tracking logic is no longer needed here.
-  // The 'useInteractionTracker' hook on the client-side page 
-  // '/content/[contentId]/page.tsx' now handles this responsibility
-  // with a more robust 'start'/'end' event system.
-
   // --- Authentication Logic (Unchanged) ---
   const isPublicPageRoute = publicPageRoutes.includes(pathname);
 

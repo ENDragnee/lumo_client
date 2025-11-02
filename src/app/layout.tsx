@@ -3,22 +3,24 @@ import "./globals.css";
 import Providers from "@/components/Providers";
 import { ReactNode } from "react";
 export { metadata } from "@/components/Metadata";
-import { Roboto } from 'next/font/google'; // Import the Roboto font function
+import { Geist, Geist_Mono } from "next/font/google";
 
-const roboto = Roboto({
-  weight: ['400', '700'], // Specify the weights you need
-  style: ['normal', 'italic'], // Specify the styles you need
-  subsets: ['latin'], // Specify the subsets you need (e.g., 'latin', 'latin-ext')
-  display: 'swap', // Recommended font-display value for performance
-  variable: '--font-roboto', // Optional: Define a CSS variable name
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
 });
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${roboto.variable} font-sans`} suppressHydrationWarning>
-      <body className="min-h-screen">
+    <html lang="en" suppressHydrationWarning>
+      <body className={`min-h-screen ${geistMono.variable} ${geistSans.variable} `}>
         <Providers>
-            <div>{children}</div>
+          <div>{children}</div>
         </Providers>
       </body>
     </html>
