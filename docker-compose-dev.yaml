@@ -23,6 +23,7 @@ services:
     ports:
       - '6379:6379'
     #volumes:
+    #
     #- lumo_redis_vol:/var/lib/redis/lumo
     networks:
       - lumo_network

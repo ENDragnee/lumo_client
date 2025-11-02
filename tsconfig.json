@@ -19,7 +19,9 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@ascii/models/*": ["../../packages/models/src/*"],
+      "@ascii/models": ["../../packages/models/src"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "src/app/api/highlights/[id]/route.js", "src/app/api/auth/[...nextauth]/route.ts", "src/middleware.ts", "src/components/progress.js", "src/app/api/content/route.js", "src/components/Workspaces.tsx", "src/app/api/chat-history/route.js", "src/lib/mongodb.ts", "src/app/api/history/route.ts", "src/app/api/creator/[userId]/route.ts", "src/app/api/elasticSearch/route.js", "src/app/api/subscriptions/status/[creatorId]/route.js"],
